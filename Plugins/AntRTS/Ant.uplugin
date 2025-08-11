@@ -1,0 +1,36 @@
+{
+	"FileVersion": 3,
+	"Version": 2,
+	"VersionName": "2.4",
+	"FriendlyName": "Ant",
+	"Description": "Crowd Movements.",
+	"Category": "",
+	"CreatedBy": "Milad R",
+	"CreatedByURL": "https://discord.gg/Ve24NEnccw",
+	"DocsURL": "https://github.com/LazyMarmotGames/AntDocument/blob/main/QuickStart.md",
+	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/a35ae91206284bf89fea2db4958e9b35",
+	"SupportURL": "https://discord.gg/Ve24NEnccw",
+	"EngineVersion": "5.5.0",
+	"CanContainContent": true,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "Ant",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [
+				"Win64",
+				"Linux",
+				"Mac",
+				"IOS",
+				"Android"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "NavCorridor",
+			"Enabled": true
+		}
+	]
+}

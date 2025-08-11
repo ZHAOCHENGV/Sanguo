@@ -1,0 +1,58 @@
+// Copyright 2024 Lazy Marmot Games. All Rights Reserved.
+
+//following macros must be defined by CustomNode
+//#define CUSTOM_NODE_VS 0	//true if its vertex shader
+//#define CUSTOM_NODE_NUM_FLOAT 1
+
+#if VF_SKELOT 
+
+#if CUSTOM_NODE_VS
+uint instanceId = Parameters.InstanceId;
+#else
+uint instanceId = asuint(Parameters.PerInstanceParams.x);
+#endif
+
+
+#if MATERIALBLENDING_ANY_TRANSLUCENT
+uint dataIndex = SkelotVF.ElementIndices[SkelotVF.InstanceEndOffset - instanceId] * SkelotVF.NumCustomDataFloats;
+#else
+uint dataIndex = SkelotVF.ElementIndices[SkelotVF.InstanceOffset + instanceId] * SkelotVF.NumCustomDataFloats;
+#endif
+
+
+#if CUSTOM_NODE_NUM_FLOAT == 1
+return float(SkelotVF.Instance_CustomData[dataIndex]);
+#endif
+
+#if CUSTOM_NODE_NUM_FLOAT == 2
+return float2(
+	SkelotVF.Instance_CustomData[dataIndex + 0], 
+	SkelotVF.Instance_CustomData[dataIndex + 1]);
+#endif
+
+#if CUSTOM_NODE_NUM_FLOAT == 3
+return float3(
+	SkelotVF.Instance_CustomData[dataIndex + 0], 
+	SkelotVF.Instance_CustomData[dataIndex + 1],
+	SkelotVF.Instance_CustomData[dataIndex + 2]);
+#endif
+
+#if CUSTOM_NODE_NUM_FLOAT == 4
+return float4(
+	SkelotVF.Instance_CustomData[dataIndex + 0], 
+	SkelotVF.Instance_CustomData[dataIndex + 1],
+	SkelotVF.Instance_CustomData[dataIndex + 2],
+	SkelotVF.Instance_CustomData[dataIndex + 3]);
+#endif
+
+#endif
+
+#undef CUSTOM_NODE_VS
+#undef CUSTOM_NODE_NUM_FLOAT
+
+return DefaultValue;
+
+
+
+
+

@@ -1,0 +1,50 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.5",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "AntTest",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine",
+				"BattleFrame",
+				"ApparatusRuntime"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "Ant",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/a35ae91206284bf89fea2db4958e9b35"
+		},
+		{
+			"Name": "Skelot",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/335a336fda3242fab2617756a4add1d6"
+		},
+		{
+			"Name": "AutomatedPerfTesting",
+			"Enabled": true
+		},
+		{
+			"Name": "Apparatus",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/66d674e3675f44c1a1e619de8adcef71"
+		},
+		{
+			"Name": "FlowFieldCanvas",
+			"Enabled": true
+		}
+	]
+}
