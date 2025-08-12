@@ -1,3 +1,11 @@
+/**
+ * @file CollisionActor.cpp
+ * @brief 碰撞Actor实现文件
+ * @details 该文件实现了用于RTS游戏中的碰撞检测和形状生成的Actor，支持多种形状的生成和管理
+ *          包括三角形、正方形等不同形状的碰撞区域和可视化效果
+ * @author AntTest Team
+ * @date 2024
+ */
 
 #include "Actors/CollisionActor.h"
 
@@ -12,78 +20,113 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Containers/StaticArray.h"
 
+/**
+ * @brief 构造函数
+ * @details 初始化碰撞Actor的组件，包括根组件、实例化静态网格、球形碰撞体和贴花组件
+ */
 ACollisionActor::ACollisionActor()
 {
+	// 启用Actor的Tick功能
 	PrimaryActorTick.bCanEverTick = true;
 	
+	// 创建根组件
 	DefaultRoot = CreateDefaultSubobject<USceneComponent>(TEXT("DefaultRoot"));
 	SetRootComponent(DefaultRoot);
 	
+	// 创建实例化静态网格组件，用于渲染多个实例
 	InstancedStaticMesh = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("InstancedStaticMesh"));
 	InstancedStaticMesh->SetCollisionEnabled(ECollisionEnabled::Type::NoCollision);
 	InstancedStaticMesh->SetupAttachment(GetRootComponent());
 	
+	// 创建球形碰撞体组件
 	SphereCollision = CreateDefaultSubobject<USphereComponent>(TEXT("SphereCollision"));
 	SphereCollision->SetupAttachment(GetRootComponent());
 
+	// 创建贴花组件，用于地面标记
 	Decal = CreateDefaultSubobject<UDecalComponent>(TEXT("Decal"));
 	Decal->SetupAttachment(DefaultRoot);
 }
 
+/**
+ * @brief 注册形状变化计时器
+ * @details 设置延迟计时器来触发组件形状变化
+ */
 void ACollisionActor::RegisterTimer()
 {
 	GetWorld()->GetTimerManager().SetTimer(ChangeShapeTimer, this, &ThisClass::FollowChangeComponent, 0.5f, false);
 }
 
+/**
+ * @brief 跟随组件变化
+ * @details 根据生成的形状类型调整碰撞体和贴花组件的参数
+ */
 void ACollisionActor::FollowChangeComponent()
 {
+	// 创建动态材质实例
 	UMaterialInstanceDynamic* DecalMaterialInstanceDynamic = Decal->CreateDynamicMaterialInstance();
+	// 设置形状切换参数
 	DecalMaterialInstanceDynamic->SetScalarParameterValue(FName("ShapeSwitch"), (float)SpawnShape);
 
+	// 根据形状类型设置距离
 	float Distance = SpawnShape == ESpawnShape::Triangle ? 100.f : 50.f;
 	
+	// 计算碰撞半径
 	CollisionRadius = InstancedStaticMesh->Bounds.SphereRadius + Distance;
 	
+	// 设置球形碰撞体的半径和位置
 	SphereCollision->SetSphereRadius(CollisionRadius);
 	SphereCollision->SetWorldLocation(InstancedStaticMesh->Bounds.Origin);
 
+	// 根据形状类型设置贴花大小
 	if (SpawnShape == ESpawnShape::Square)
 	{
+		// 正方形形状的贴花设置
 		Decal->DecalSize = FVector(500.f,
 			InstancedStaticMesh->Bounds.BoxExtent.Y + (GridTileSize.Y * 2),
 			InstancedStaticMesh->Bounds.BoxExtent.X + (GridTileSize.X * 2));
 		
+		// 设置材质参数
 		DecalMaterialInstanceDynamic->SetScalarParameterValue(TEXT("ScaleX"), InstancedStaticMesh->Bounds.BoxExtent.X + (GridTileSize.X * 2) + 1000.f);
 		DecalMaterialInstanceDynamic->SetScalarParameterValue(TEXT("ScaleY"), InstancedStaticMesh->Bounds.BoxExtent.Y + (GridTileSize.Y * 2));
 	}
 	else
 	{
+		// 其他形状的贴花设置
 		Decal->DecalSize = FVector(500.f, CollisionRadius, CollisionRadius);
 	}
 	
+	// 设置贴花位置
 	Decal->SetWorldLocation(InstancedStaticMesh->Bounds.Origin);
-	
-	
 }
 
+/**
+ * @brief 游戏开始时调用
+ * @details 初始化地址映射表，设置Ant子系统的回调函数
+ */
 void ACollisionActor::BeginPlay()
 {
 	Super::BeginPlay();
 	
+	// 清空并预分配地址映射表
 	AddressMap.Empty();
 	AddressMap.Reserve(GetInstancedCount());
 
+	// 初始化地址映射表，所有地址初始为false
 	for (int i = 0; i < GetInstancedCount(); i++)
 	{
 		AddressMap.Emplace(i, false);
 	}
 
+	// 获取Ant子系统并设置回调
 	if (auto* AntSubsystem = GetWorld()->GetSubsystem<UAntSubsystem>())
 	{
+		// 设置移动目标到达的回调函数
 		AntSubsystem->OnMovementGoalReached.AddLambda([this](const TArray<FAntHandle>& Handles)
 		{
+			// 检查是否有可用地址
 			if (CheckHasAddress().IsEmpty())
 			{
+				// 如果查询结果数量等于地址映射表大小，且未在生成中，则开始生成标志Actor
 				if (QueryResult.Num() == AddressMap.Num())
 				{
 					if (!bIsSpawning)
@@ -95,6 +138,7 @@ void ACollisionActor::BeginPlay()
 			}
 		});
 
+		// 设置Ant句柄完成某事的回调函数
 		AntSubsystem->OnAntHandleCompleteSomething.AddUniqueDynamic(this, &ThisClass::PlayCheerAnim);
 	}
 

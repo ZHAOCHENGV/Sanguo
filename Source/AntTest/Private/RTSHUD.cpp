@@ -1,5 +1,13 @@
- // Fill out your copyright notice in the Description page of Project Settings.
+/**
+ * @file RTSHUD.cpp
+ * @brief RTS HUD实现文件
+ * @details 该文件实现了RTS游戏的HUD系统，包括选择框绘制、单位血条显示等功能
+ *          提供游戏界面渲染和用户交互功能
+ * @author AntTest Team
+ * @date 2024
+ */
 
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "AntTest/Public/RTSHUD.h"
 
@@ -15,89 +23,117 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Controllers/RTSPlayerController.h"
 
- //#define ObstacleFlag 1u << 0
+// 定义空闲代理标志位
+//#define ObstacleFlag 1u << 0
 #define IdleAgentFlag 1u << 1
 
+/**
+ * @brief 绘制选择框
+ * @param Selection 选择框的2D边界
+ * @details 设置选择框并启用绘制标志
+ */
 void ARTSHUD::DrawSelectionBox(const FBox2f & Selection)
 {
 	SelectionBox = Selection;
 	DrawSelectionbox = true;
 }
 
+/**
+ * @brief 绘制HUD
+ * @details 绘制游戏界面元素，包括选中单位的血条和选择框
+ */
 void ARTSHUD::DrawHUD()
 {
 	Super::DrawHUD();
 
-	// draw UI for selected agents
+	// 为选中的代理绘制UI
 	if (SelectedUnits)
 	{
+		// 获取Ant子系统
 		auto *ant = GetWorld()->GetSubsystem<UAntSubsystem>();
+		// 遍历所有选中的单位
 		for (const auto &handle : *SelectedUnits)
 		{
-			// skip non-agent units
+			// 跳过无效的代理单位
 			if (!ant->IsValidAgent(handle))
 				continue;
 
+			// 获取代理的世界位置并投影到屏幕
 			const FVector agentWorldLoc(ant->GetAgentData(handle).GetLocationLerped());
 			const auto agentScreenLoc = Project(agentWorldLoc);
+			// 定义UI区域
 			const FBox2f uiArea(FVector2f(agentScreenLoc.X - 10.f, agentScreenLoc.Y - 25.f), FVector2f(agentScreenLoc.X + 10.f, agentScreenLoc.Y - 20.f));
 
+			// 计算血条百分比
 			const float CurrentHealth = ant->GetAgentUserData(handle).Get<FUnitData>().Health;
 			const float MaxHealth = ant->GetAgentUserData(handle).Get<FUnitData>().MaxHealth;
 			const float HealthPercent = FMath::Clamp(CurrentHealth / MaxHealth, 0.f, 1.f);
 
+			// 计算血条宽度
 			const float BarWidth = uiArea.Max.X - uiArea.Min.X;
 			const float GreenBarWidth = BarWidth * HealthPercent;
 
-			// fill color
+			// 绘制血条背景和前景
 			const FBox2f HealthRectBk = uiArea.ExpandBy(1);
 			DrawRect(FLinearColor::Black, HealthRectBk.Min.X, HealthRectBk.Min.Y, HealthRectBk.Max.X - HealthRectBk.Min.X, HealthRectBk.Max.Y - HealthRectBk.Min.Y);
 			DrawRect(FLinearColor::Green, uiArea.Min.X, uiArea.Min.Y, GreenBarWidth, uiArea.Max.Y - uiArea.Min.Y);
 		}
 	}
 
-	// draw box selection on the screen
+	// 在屏幕上绘制选择框
 	if (DrawSelectionbox)
 	{
-		// fill color
+		// 绘制填充颜色（半透明绿色）
 		DrawRect(FLinearColor(0.f, 1.f, 0.f, 0.3f), SelectionBox.Min.X, SelectionBox.Min.Y, SelectionBox.Max.X - SelectionBox.Min.X, SelectionBox.Max.Y - SelectionBox.Min.Y);
 
-		// draw border lines
+		// 绘制边框线条
 		DrawLine(SelectionBox.Min.X, SelectionBox.Min.Y, SelectionBox.Max.X, SelectionBox.Min.Y, FLinearColor::Green, 1);
 		DrawLine(SelectionBox.Max.X, SelectionBox.Min.Y, SelectionBox.Max.X, SelectionBox.Max.Y, FLinearColor::Green, 1);
 		DrawLine(SelectionBox.Max.X, SelectionBox.Max.Y, SelectionBox.Min.X, SelectionBox.Max.Y, FLinearColor::Green, 1);
 		DrawLine(SelectionBox.Min.X, SelectionBox.Max.Y, SelectionBox.Min.X, SelectionBox.Min.Y, FLinearColor::Green, 1);
 	}
 
-	// reset
+	// 重置绘制标志
 	DrawSelectionbox = false;
 }
 
-// Sets default values
+/**
+ * @brief RTSUnits构造函数
+ * @details 初始化RTSUnits，创建选中单位数组并启用Tick功能
+ */
 ARTSUnits::ARTSUnits() :
 	SelectedUnits(new TArray<FAntHandle>)
 {
- 	// Set this actor to call Tick() every frame.
+ 	// 设置此Actor每帧调用Tick()
 	PrimaryActorTick.bCanEverTick = true;
 }
 
- void ARTSUnits::OnLeftMouseReleased(bool bIsReleased)
- {
-	 if (bIsDraw)
-	 {
-		 if (MLBDown)
-		 {
-		 	float xMouse, yMouse;
-		 	GetWorld()->GetFirstPlayerController()->GetMousePosition(xMouse, yMouse);
-		 	SelectOnScreenAgents({ {FMath::Min(StartSelectionPos.X, xMouse), FMath::Min(StartSelectionPos.Y, yMouse)},
+/**
+ * @brief 处理鼠标左键释放事件
+ * @param bIsReleased 是否已释放
+ * @details 处理选择框绘制和单位选择逻辑
+ */
+void ARTSUnits::OnLeftMouseReleased(bool bIsReleased)
+{
+	// 如果正在绘制选择框
+	if (bIsDraw)
+	{
+		if (MLBDown)
+		{
+			// 获取鼠标位置
+			float xMouse, yMouse;
+			GetWorld()->GetFirstPlayerController()->GetMousePosition(xMouse, yMouse);
+			// 选择屏幕上的代理
+			SelectOnScreenAgents({ {FMath::Min(StartSelectionPos.X, xMouse), FMath::Min(StartSelectionPos.Y, yMouse)},
 			{FMath::Max(StartSelectionPos.X, xMouse), FMath::Max(StartSelectionPos.Y, yMouse)} });
-		 	
-		 	bIsDraw = false;
-		 	RTSPC->SetIsDraw(false);
-		 }
-	 }
-	 else
-	 {
+			
+			// 停止绘制
+			bIsDraw = false;
+			RTSPC->SetIsDraw(false);
+		}
+	}
+	else
+	{
 	 	bIsLeftMouseReleased = bIsReleased;
 	 	HoldTime = 0.0f;
 	 }

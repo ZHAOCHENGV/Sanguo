@@ -33,7 +33,7 @@
 #include "Traits/Statistics.h"
 #include "Traits/PrimaryType.h"
 #include "Traits/Transform.h"
-#include "Traits/ProjectileConfig.h"
+
 
 #include "AgentConfigDataAsset.generated.h"
 
