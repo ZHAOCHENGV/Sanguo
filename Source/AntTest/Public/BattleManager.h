@@ -38,6 +38,20 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAntDeath, FAntHandle, AntHandle);
  * @details 该类继承自AActor，使用四叉树数据结构来高效管理RTS游戏中的单位位置
  *          支持快速查找最近敌人、单位分组和战斗逻辑处理
  */
+struct FTeamGroup
+{
+        int32 Team = -1;
+        int32 Group = -1;
+        bool operator==(const FTeamGroup& Other) const { return Team == Other.Team && Group == Other.Group; }
+};
+
+FORCEINLINE uint32 GetTypeHash(const FTeamGroup& Key)
+{
+        uint32 Hash = 0;
+        Hash = HashCombine(Hash, GetTypeHash(Key.Team));
+        Hash = HashCombine(Hash, GetTypeHash(Key.Group));
+        return Hash;
+}
 UCLASS()
 class ANTTEST_API AQuadTreeManager : public AActor
 {
@@ -78,8 +92,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="QuadTree")
 	int NodeCapacity = 4;
 
-	/** @brief 存储所有单位及其队伍ID的映射表 */
-	TMap<FAntHandle*, int32> UnitTeams;
+        /** @brief 存储所有单位及其队伍ID的映射表 */
+        TMap<FAntHandle*, int32> UnitTeams;
+        /** @brief 存储所有单位及其组ID的映射表 */
+        TMap<FAntHandle*, int32> UnitGroups;
+        /** @brief 各队伍组到目标敌方组的映射 */
+        TMap<FTeamGroup, FTeamGroup> GroupTargets;
 
 	/**
 	 * @brief 初始化或清空四叉树
@@ -87,22 +105,24 @@ public:
 	 */
 	void InitializeQuadTree();
 
-	/**
-	 * @brief 添加单位到管理器和四叉树（蓝图可调用）
-	 * @param Unit 要添加的单位句柄
-	 * @param Team 单位所属的队伍ID
-	 * @details 为蓝图提供添加单位的接口
-	 */
-	UFUNCTION(BlueprintCallable, Category="QuadTree", DisplayName = "AddUnit")
-	void BP_AddUnit(FAntHandle Unit, int32 Team);
+        /**
+         * @brief 添加单位到管理器和四叉树（蓝图可调用）
+         * @param Unit 要添加的单位句柄
+         * @param Team 单位所属的队伍ID
+         * @param Group 单位所属的组ID
+         * @details 为蓝图提供添加单位的接口
+         */
+        UFUNCTION(BlueprintCallable, Category="QuadTree", DisplayName = "AddUnit")
+        void BP_AddUnit(FAntHandle Unit, int32 Team, int32 Group);
 	
-	/**
-	 * @brief 添加单位到管理器和四叉树
-	 * @param Unit 要添加的单位句柄引用
-	 * @param Team 单位所属的队伍ID
-	 * @details 将单位添加到单位队伍映射表和四叉树中
-	 */
-	void AddUnit(FAntHandle& Unit, int32 Team);
+        /**
+         * @brief 添加单位到管理器和四叉树
+         * @param Unit 要添加的单位句柄引用
+         * @param Team 单位所属的队伍ID
+         * @param Group 单位所属的组ID
+         * @details 将单位添加到单位队伍映射表和四叉树中
+         */
+        void AddUnit(FAntHandle& Unit, int32 Team, int32 Group);
 
 	/**
 	 * @brief 从管理器和四叉树移除单位
