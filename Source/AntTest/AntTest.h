@@ -55,9 +55,13 @@ struct FUnitData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 SkelotInstanceID = 0;
 
-	/** @brief 队伍ID */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	int32 TeamID = 0;
+        /** @brief 队伍ID */
+        UPROPERTY(EditAnywhere, BlueprintReadWrite)
+        int32 TeamID = 0;
+
+        /** @brief 组ID */
+        UPROPERTY(EditAnywhere, BlueprintReadWrite)
+        int32 GroupID = 0;
 
 	/** @brief 当前目标代理句柄 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)

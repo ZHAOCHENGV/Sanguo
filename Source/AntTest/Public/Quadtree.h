@@ -25,20 +25,23 @@ public:
 	 * @brief 四叉树对象结构体
 	 * @details 存储单位信息，包含Ant句柄指针和队伍ID
 	 */
-	struct FQuadTreeObject {
-		/** @brief Ant句柄指针，指向具体的单位 */
-		FAntHandle* Handle;
-		/** @brief 单位所属的队伍ID */
-		int Team;
-		
-		/**
-		 * @brief 构造函数
-		 * @param InHandle Ant句柄指针
-		 * @param InTeam 队伍ID
-		 */
-		FQuadTreeObject(FAntHandle* InHandle = nullptr, int InTeam = 0)
-			: Handle(InHandle), Team(InTeam) {}
-	};
+        struct FQuadTreeObject {
+                /** @brief Ant句柄指针，指向具体的单位 */
+                FAntHandle* Handle;
+                /** @brief 单位所属的队伍ID */
+                int Team;
+                /** @brief 单位所属的组ID */
+                int Group;
+
+                /**
+                 * @brief 构造函数
+                 * @param InHandle Ant句柄指针
+                 * @param InTeam 队伍ID
+                 * @param InGroup 组ID
+                 */
+                FQuadTreeObject(FAntHandle* InHandle = nullptr, int InTeam = 0, int InGroup = 0)
+                        : Handle(InHandle), Team(InTeam), Group(InGroup) {}
+        };
 
 	/** @brief 节点中心点坐标 */
 	FVector2D Center;
@@ -111,9 +114,9 @@ public:
 	 * @param WorldContextObject 世界上下文对象
 	 * @details 将单位插入到四叉树的适当位置，如果节点已满则进行细分
 	 */
-	void Insert(FAntHandle* InHandle, int32 InTeam, const UObject *WorldContextObject)
-	{
-		if (!InHandle) return;
+        void Insert(FAntHandle* InHandle, int32 InTeam, int32 InGroup, const UObject *WorldContextObject)
+        {
+                if (!InHandle) return;
 		
 		// 获取单位位置
 		FVector3f Location;
@@ -126,11 +129,11 @@ public:
 		if (bIsLeaf)
 		{
 			// 叶节点且未满，直接添加
-			if (Objects.Num() < Capacity)
-			{
-				Objects.Emplace(InHandle, InTeam);
-				return;
-			}
+                        if (Objects.Num() < Capacity)
+                        {
+                                Objects.Emplace(InHandle, InTeam, InGroup);
+                                return;
+                        }
 			// 叶节点已满，需要分裂
 			Subdivide();
 			// 将当前叶节点的对象重新分配到子节点
@@ -142,7 +145,7 @@ public:
 					UAntFunctionLibrary::GetAgentLocation(WorldContextObject, *Obj.Handle, HandleLocation);
 					if (Children[i]->ContainsPoint(FVector2D(HandleLocation.X, HandleLocation.Y)))
 					{
-						Children[i]->Insert(Obj.Handle, Obj.Team, WorldContextObject);
+                                                Children[i]->Insert(Obj.Handle, Obj.Team, Obj.Group, WorldContextObject);
 						break;
 					}
 				}
@@ -153,13 +156,13 @@ public:
 		// 如果不是叶节点，则递归插入到对应子节点
 		for (int i = 0; i < 4; i++)
 		{
-			if (Children[i] && Children[i]->ContainsPoint(Point))
-			{
-				Children[i]->Insert(InHandle, InTeam, WorldContextObject);
-				return;
-			}
-		}
-	}
+                                if (Children[i] && Children[i]->ContainsPoint(Point))
+                                {
+                                        Children[i]->Insert(InHandle, InTeam, InGroup, WorldContextObject);
+                                        return;
+                                }
+                }
+        }
 
 	/**
 	 * @brief 从四叉树中移除单位
@@ -224,9 +227,10 @@ public:
 	 * @return 返回最近敌人的Ant句柄指针，如果未找到则返回nullptr
 	 * @details 使用空间剪枝优化最近邻查找，忽略同队单位
 	 */
-	FAntHandle* FindNearest(const FVector2D& Point, int32 MyTeam, float& OutNearestDistSq, const UObject *WorldContextObject)
-	{
-		FAntHandle* Nearest = nullptr;
+        FAntHandle* FindNearest(const FVector2D& Point, int32 MyTeam, float& OutNearestDistSq, const UObject *WorldContextObject,
+                                                    int32 TargetTeam = -1, int32 TargetGroup = -1)
+        {
+                FAntHandle* Nearest = nullptr;
 		
 		if (bIsLeaf)
 		{
@@ -234,10 +238,12 @@ public:
 			for (const FQuadTreeObject& Obj : Objects)
 			{
 				// 检查是否为敌方单位
-				if (Obj.Handle && Obj.Team != MyTeam)
-				{
-					// 计算距离
-					FVector3f Location;
+                                if (Obj.Handle && Obj.Team != MyTeam &&
+                                        (TargetTeam == -1 || Obj.Team == TargetTeam) &&
+                                        (TargetGroup == -1 || Obj.Group == TargetGroup))
+                                {
+                                        // 计算距离
+                                        FVector3f Location;
 					UAntFunctionLibrary::GetAgentLocation(WorldContextObject, *Obj.Handle, Location);
 					FVector2D ObjPos = FVector2D(Location.X, Location.Y);
 					float DistSq = FVector2D::DistSquared(Point, ObjPos);
@@ -268,7 +274,7 @@ public:
 			// 如果子节点区域可能包含更近的单位，则递归查找
 			if (DistSqBox <= OutNearestDistSq)
 			{
-				FAntHandle* ChildNearest = Children[i]->FindNearest(Point, MyTeam, OutNearestDistSq, WorldContextObject);
+                                FAntHandle* ChildNearest = Children[i]->FindNearest(Point, MyTeam, OutNearestDistSq, WorldContextObject, TargetTeam, TargetGroup);
 				if (ChildNearest)
 					Nearest = ChildNearest;
 			}

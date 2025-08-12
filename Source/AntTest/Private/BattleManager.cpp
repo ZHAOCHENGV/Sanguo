@@ -106,9 +106,9 @@ void AQuadTreeManager::InitializeQuadTree()
  * @param Team 单位所属的队伍ID
  * @details 为蓝图提供添加单位的接口
  */
-void AQuadTreeManager::BP_AddUnit(FAntHandle Unit, int32 Team)
+void AQuadTreeManager::BP_AddUnit(FAntHandle Unit, int32 Team, int32 Group)
 {
-	AddUnit(Unit, Team);
+        AddUnit(Unit, Team, Group);
 }
 
 /**
@@ -117,19 +117,26 @@ void AQuadTreeManager::BP_AddUnit(FAntHandle Unit, int32 Team)
  * @param Team 单位所属的队伍ID
  * @details 将单位添加到单位队伍映射表和四叉树中
  */
-void AQuadTreeManager::AddUnit(FAntHandle& Unit, int32 Team)
+void AQuadTreeManager::AddUnit(FAntHandle& Unit, int32 Team, int32 Group)
 {
-	// 检查单位是否已存在
-	if (!UnitTeams.Contains(&Unit))
-	{
-		// 添加到单位队伍映射表
-		UnitTeams.Add(&Unit, Team);
-		// 如果根节点有效，则插入到四叉树中
-		if (RootNode.IsValid())
-		{
-			RootNode->Insert(&Unit, Team, GetWorld());
-		}
-	}
+        // 检查单位是否已存在
+        if (!UnitTeams.Contains(&Unit))
+        {
+                // 添加到单位队伍映射表
+                UnitTeams.Add(&Unit, Team);
+                UnitGroups.Add(&Unit, Group);
+                if (AntSubsystem)
+                {
+                        FUnitData& Data = AntSubsystem->GetAgentUserData(Unit).GetMutable<FUnitData>();
+                        Data.TeamID = Team;
+                        Data.GroupID = Group;
+                }
+                // 如果根节点有效，则插入到四叉树中
+                if (RootNode.IsValid())
+                {
+                        RootNode->Insert(&Unit, Team, Group, GetWorld());
+                }
+        }
 }
 
 /**
@@ -139,16 +146,17 @@ void AQuadTreeManager::AddUnit(FAntHandle& Unit, int32 Team)
  */
 void AQuadTreeManager::RemoveUnit(FAntHandle* Unit)
 {
-	if (Unit && UnitTeams.Contains(Unit))
-	{
-		// 从单位队伍映射表中移除
-		UnitTeams.Remove(Unit);
-		// 如果根节点有效，则从四叉树中移除
-		if (RootNode.IsValid())
-		{
-			RootNode->Remove(Unit, GetWorld());
-		}
-	}
+        if (Unit && UnitTeams.Contains(Unit))
+        {
+                // 从单位队伍映射表中移除
+                UnitTeams.Remove(Unit);
+                UnitGroups.Remove(Unit);
+                // 如果根节点有效，则从四叉树中移除
+                if (RootNode.IsValid())
+                {
+                        RootNode->Remove(Unit, GetWorld());
+                }
+        }
 }
 
 /**
@@ -166,12 +174,33 @@ FAntHandle* AQuadTreeManager::FindNearestEnemy(FAntHandle* Unit)
 	UAntFunctionLibrary::GetAgentLocation(GetWorld(), *Unit, Location);
 	FVector2D QueryPoint = FVector2D(Location.X, Location.Y);
 	
-	// 获取单位所属队伍
-	int32 MyTeam = UnitTeams.Contains(Unit) ? UnitTeams[Unit] : -1;
-	float BestDistSq = TNumericLimits<float>::Max();
-	
-	// 在四叉树中查找最近敌人
-	return RootNode->FindNearest(QueryPoint, MyTeam, BestDistSq, GetWorld());
+        // 获取单位所属队伍和组
+        int32 MyTeam = UnitTeams.Contains(Unit) ? UnitTeams[Unit] : -1;
+        int32 MyGroup = UnitGroups.Contains(Unit) ? UnitGroups[Unit] : -1;
+        float BestDistSq = TNumericLimits<float>::Max();
+
+        FTeamGroup MyKey{MyTeam, MyGroup};
+        FAntHandle* Result = nullptr;
+        if (const FTeamGroup* Target = GroupTargets.Find(MyKey))
+        {
+                Result = RootNode->FindNearest(QueryPoint, MyTeam, BestDistSq, GetWorld(), Target->Team, Target->Group);
+                if (!Result)
+                {
+                        GroupTargets.Remove(MyKey);
+                }
+        }
+        if (!Result)
+        {
+                BestDistSq = TNumericLimits<float>::Max();
+                Result = RootNode->FindNearest(QueryPoint, MyTeam, BestDistSq, GetWorld());
+                if (Result)
+                {
+                        int32 EnemyTeam = UnitTeams.Contains(Result) ? UnitTeams[Result] : -1;
+                        int32 EnemyGroup = UnitGroups.Contains(Result) ? UnitGroups[Result] : -1;
+                        GroupTargets.Add(MyKey, FTeamGroup{EnemyTeam, EnemyGroup});
+                }
+        }
+        return Result;
 }
 
 /**
@@ -184,13 +213,14 @@ void AQuadTreeManager::UpdateQuadTree()
 	RootNode = MakeShareable(new QuadTreeNode(RegionCenter, RegionHalfSize, NodeCapacity));
 	
 	// 重新插入所有单位
-	for (auto& Pair : UnitTeams)
-	{
-		FAntHandle* UnitActor = Pair.Key;
-		int32 Team = Pair.Value;
-		if (UnitActor)
-		{
-			RootNode->Insert(UnitActor, Team, GetWorld());
-		}
-	}
+        for (auto& Pair : UnitTeams)
+        {
+                FAntHandle* UnitActor = Pair.Key;
+                int32 Team = Pair.Value;
+                if (UnitActor)
+                {
+                        int32 Group = UnitGroups.Contains(UnitActor) ? UnitGroups[UnitActor] : -1;
+                        RootNode->Insert(UnitActor, Team, Group, GetWorld());
+                }
+        }
 }
