@@ -52,65 +52,43 @@ void AQuadTreeManager::Tick(float DeltaTime)
 	// 更新四叉树结构
 	UpdateQuadTree();
 
-        // 记录每个队伍选择的敌人目标，确保一个小队只攻击同一队伍
-        TMap<int32, FAntHandle*> TeamTargets;
+	// 示例：每帧对所有单位查找最近敌人
+	for (auto& Pair : UnitTeams)
+	{
+		FAntHandle* UnitActor = Pair.Key;
+		// 检查单位是否有效
+		if (UAntFunctionLibrary::IsValidAgent(GetWorld(), *UnitActor)) continue;
+		
+		// 查找最近的敌人
+		if (FAntHandle* Enemy = FindNearestEnemy(UnitActor))
+		{
+			// 获取敌人位置
+			FVector3f Location;
+			UAntFunctionLibrary::GetAgentLocation(GetWorld(), *Enemy, Location);
+			
+			// 获取敌人和当前单位的单位数据
+			FUnitData& EnemyUnitData = AntSubsystem->GetAgentUserData(*Enemy).GetMutable<FUnitData>();
+			FUnitData& UnitData = AntSubsystem->GetAgentUserData(*UnitActor).GetMutable<FUnitData>();
 
-        // 示例：每帧对所有单位查找最近敌人
-        for (auto& Pair : UnitTeams)
-        {
-                FAntHandle* UnitActor = Pair.Key;
-                int32 MyTeam = Pair.Value;
+			UE_LOG(LogTemp, Warning, TEXT("通过"));
+			
+			// 如果当前单位未在攻击状态，则移动到敌人位置
+			if (!UnitData.bIsAttack)
+			{
+				bool bIsMove = UAntFunctionLibrary::MoveAgentToLocation(GetWorld(), *UnitActor, FVector(Location),
+				200.f, 1.f, 0.6f, 300.f, 20.f, EAntPathFollowerType::FlowField, 1200.f);
+				if (bIsMove) UnitData.bIsAttack = true;
+			}
 
-                // 检查单位是否有效
-                if (UAntFunctionLibrary::IsValidAgent(GetWorld(), *UnitActor)) continue;
-
-                // 查找或获取当前队伍的目标敌人
-                FAntHandle* Enemy = nullptr;
-                if (FAntHandle** ExistingTarget = TeamTargets.Find(MyTeam))
-                {
-                        Enemy = *ExistingTarget;
-                        // 如果目标无效，则重新查找
-                        if (!Enemy || !UAntFunctionLibrary::IsValidAgent(GetWorld(), *Enemy))
-                        {
-                                Enemy = FindNearestEnemy(UnitActor);
-                                TeamTargets[MyTeam] = Enemy;
-                        }
-                }
-                else
-                {
-                        Enemy = FindNearestEnemy(UnitActor);
-                        TeamTargets.Add(MyTeam, Enemy);
-                }
-
-                if (Enemy)
-                {
-                        // 获取敌人位置
-                        FVector3f Location;
-                        UAntFunctionLibrary::GetAgentLocation(GetWorld(), *Enemy, Location);
-
-                        // 获取敌人和当前单位的单位数据
-                        FUnitData& EnemyUnitData = AntSubsystem->GetAgentUserData(*Enemy).GetMutable<FUnitData>();
-                        FUnitData& UnitData = AntSubsystem->GetAgentUserData(*UnitActor).GetMutable<FUnitData>();
-
-                        UE_LOG(LogTemp, Warning, TEXT("通过"));
-
-                        // 如果当前单位未在攻击状态，则移动到敌人位置
-                        if (!UnitData.bIsAttack)
-                        {
-                                bool bIsMove = UAntFunctionLibrary::MoveAgentToLocation(GetWorld(), *UnitActor, FVector(Location),
-                                200.f, 1.f, 0.6f, 300.f, 20.f, EAntPathFollowerType::FlowField, 1200.f);
-                                if (bIsMove) UnitData.bIsAttack = true;
-                        }
-
-                        // 如果敌人未在攻击状态，则移动到当前单位位置
-                        if (!EnemyUnitData.bIsAttack)
-                        {
-                                bool bIsMove = UAntFunctionLibrary::MoveAgentToLocation(GetWorld(),* Enemy, FVector(Location),
-                                200.f, 1.f, 0.6f, 300.f, 20.f, EAntPathFollowerType::FlowField, 1200.f);
-                                if (bIsMove) EnemyUnitData.bIsAttack = true;
-                        }
-                }
-        }
+			// 如果敌人未在攻击状态，则移动到当前单位位置
+			if (!EnemyUnitData.bIsAttack)
+			{
+				bool bIsMove = UAntFunctionLibrary::MoveAgentToLocation(GetWorld(),* Enemy, FVector(Location),
+				200.f, 1.f, 0.6f, 300.f, 20.f, EAntPathFollowerType::FlowField, 1200.f);
+				if (bIsMove) EnemyUnitData.bIsAttack = true;
+			}
+		}
+	}
 }
 
 /**
