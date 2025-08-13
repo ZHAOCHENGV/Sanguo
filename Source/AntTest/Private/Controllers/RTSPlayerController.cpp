@@ -17,6 +17,8 @@
 #include "RTSHUD.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Pawns/RTSPawn.h"
+#include "InputActionValue.h"
+#include "GameFramework/FloatingPawnMovement.h"
 
 /**
  * @brief 构造函数
@@ -26,6 +28,29 @@ ARTSPlayerController::ARTSPlayerController()
 {
 	// 显示鼠标光标
 	SetShowMouseCursor(true);
+}
+
+void ARTSPlayerController::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (ARTSPawn* RTSPawn = Cast<ARTSPawn>(GetPawn()))
+	{
+		USpringArmComponent* SpringArm = RTSPawn->GetSpringArm();
+		if (SpringArm)
+		{
+			// 平滑缩放到目标长度
+			if (DesiredArmLength < 0.f)
+			{
+				DesiredArmLength = SpringArm->TargetArmLength;
+			}
+			SpringArm->TargetArmLength = FMath::FInterpTo(
+				SpringArm->TargetArmLength,
+				FMath::Clamp(DesiredArmLength, MinArmLength, MaxArmLength),
+				DeltaSeconds,
+				ZoomInterpSpeed);
+		}
+	}
 }
 
 /**
@@ -87,6 +112,15 @@ void ARTSPlayerController::BeginPlay()
 	UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
 	// 添加输入映射上下文
 	Subsystem->AddMappingContext(InputMappingContext, 0);
+
+	// 初始化移动速度到基础速度
+	if (ARTSPawn* RTSPawn = Cast<ARTSPawn>(GetPawn()))
+	{
+		if (UFloatingPawnMovement* MoveComp = RTSPawn->FindComponentByClass<UFloatingPawnMovement>())
+		{
+			MoveComp->MaxSpeed = BaseMoveSpeed;
+		}
+	}
 }
 
 /**
@@ -108,6 +142,22 @@ void ARTSPlayerController::SetupInputComponent()
 	EnhancedInputComponent->BindAction(IA_ZoomAction, ETriggerEvent::Triggered, this, &ARTSPlayerController::Input_Zoom);
 	EnhancedInputComponent->BindAction(IA_LeftButton, ETriggerEvent::Started, this, &ARTSPlayerController::Input_LeftButtonPressed);
 	EnhancedInputComponent->BindAction(IA_LeftButton, ETriggerEvent::Completed, this, &ARTSPlayerController::Input_LeftButtonReleased);
+	if (IA_LookAction)
+	{
+		EnhancedInputComponent->BindAction(IA_LookAction, ETriggerEvent::Triggered, this, &ARTSPlayerController::Input_Look);
+	}
+
+	// 修饰键：Ctrl 旋转、Shift 加速
+	if (IA_RotateModifier)
+	{
+		EnhancedInputComponent->BindAction(IA_RotateModifier, ETriggerEvent::Started, this, &ARTSPlayerController::Input_RotateModifierStarted);
+		EnhancedInputComponent->BindAction(IA_RotateModifier, ETriggerEvent::Completed, this, &ARTSPlayerController::Input_RotateModifierCompleted);
+	}
+	if (IA_SpeedModifier)
+	{
+		EnhancedInputComponent->BindAction(IA_SpeedModifier, ETriggerEvent::Started, this, &ARTSPlayerController::Input_SpeedModifierStarted);
+		EnhancedInputComponent->BindAction(IA_SpeedModifier, ETriggerEvent::Completed, this, &ARTSPlayerController::Input_SpeedModifierCompleted);
+	}
 }
 
 /**
@@ -145,14 +195,22 @@ void ARTSPlayerController::Input_Zoom(const FInputActionValue& Value)
 	const float AxisValue = Value.Get<float>();
 
 	// 如果控制器有RTSPawn，则调整弹簧臂长度
-	if (ARTSPawn* RTSPawn = Cast<ARTSPawn>(GetPawn()))
+    if (ARTSPawn* RTSPawn = Cast<ARTSPawn>(GetPawn()))
 	{
-		// 计算期望的缩放值
-		float ZoomDesired = AxisValue * ZoomSpeed;
-		// 限制缩放范围
-		ZoomDesired = FMath::Clamp(ZoomDesired, -2000.f, 2000.f);
-		// 调整弹簧臂目标长度
-		RTSPawn->GetSpringArm()->TargetArmLength += ZoomDesired;
+		USpringArmComponent* SpringArm = RTSPawn->GetSpringArm();
+		if (!SpringArm)
+		{
+			return;
+		}
+		if (DesiredArmLength < 0.f)
+		{
+			DesiredArmLength = SpringArm->TargetArmLength;
+		}
+        const float ZoomInput = bInvertZoomAxis ? -AxisValue : AxisValue;
+        DesiredArmLength = FMath::Clamp(
+            DesiredArmLength - ZoomInput * ZoomSpeed,
+			MinArmLength,
+			MaxArmLength);
 	}
 }
 
@@ -179,4 +237,82 @@ void ARTSPlayerController::Input_LeftButtonReleased(const FInputActionValue& Val
 	GetMousePosition(MouseClickedPosition.X, MouseClickedPosition.Y);
 	// 调用鼠标右键点击处理函数
 	OnMouseRightButtonClicked(MouseClickedPosition);
+}
+
+// 修饰键处理
+void ARTSPlayerController::Input_RotateModifierStarted(const FInputActionValue& Value)
+{
+	bIsRotateModifierHeld = true;
+	// 捕获鼠标用于旋转
+	FInputModeGameOnly InputMode;
+	SetInputMode(InputMode);
+}
+
+void ARTSPlayerController::Input_RotateModifierCompleted(const FInputActionValue& Value)
+{
+	bIsRotateModifierHeld = false;
+	// 释放鼠标
+	FInputModeGameAndUI InputMode;
+	SetInputMode(InputMode);
+}
+
+void ARTSPlayerController::Input_SpeedModifierStarted(const FInputActionValue& Value)
+{
+	bIsSpeedModifierHeld = true;
+	if (ARTSPawn* RTSPawn = Cast<ARTSPawn>(GetPawn()))
+	{
+		if (UFloatingPawnMovement* MoveComp = RTSPawn->FindComponentByClass<UFloatingPawnMovement>())
+		{
+			MoveComp->MaxSpeed = BaseMoveSpeed * SpeedBoostMultiplier;
+		}
+	}
+}
+
+void ARTSPlayerController::Input_SpeedModifierCompleted(const FInputActionValue& Value)
+{
+	bIsSpeedModifierHeld = false;
+	if (ARTSPawn* RTSPawn = Cast<ARTSPawn>(GetPawn()))
+	{
+		if (UFloatingPawnMovement* MoveComp = RTSPawn->FindComponentByClass<UFloatingPawnMovement>())
+		{
+			MoveComp->MaxSpeed = BaseMoveSpeed;
+		}
+	}
+}
+
+void ARTSPlayerController::Input_Look(const FInputActionValue& Value)
+{
+	if (!bIsRotateModifierHeld)
+	{
+		return;
+	}
+
+	FVector2D LookAxis = Value.Get<FVector2D>();
+
+    APawn* ControlledPawn = GetPawn();
+    if (!ControlledPawn)
+	{
+		return;
+	}
+
+	// 调整Actor的Yaw，使相机绕场景旋转
+    FRotator ActorRot = ControlledPawn->GetActorRotation();
+	ActorRot.Yaw += LookAxis.X * RotateYawSpeed;
+    ControlledPawn->SetActorRotation(ActorRot);
+
+	// 调整俯仰：修改弹簧臂Pitch
+    if (ARTSPawn* RTSPawn = Cast<ARTSPawn>(ControlledPawn))
+	{
+		if (USpringArmComponent* SpringArm = RTSPawn->GetSpringArm())
+		{
+			FRotator SpringRot = SpringArm->GetRelativeRotation();
+			SpringRot.Pitch = FMath::Clamp(SpringRot.Pitch + LookAxis.Y * RotatePitchSpeed, MinPitch, MaxPitch);
+			SpringArm->SetRelativeRotation(SpringRot);
+		}
+	}
+
+	// 同步控制器旋转Yaw用于移动方向
+	FRotator ControlRot = GetControlRotation();
+	ControlRot.Yaw = ActorRot.Yaw;
+	SetControlRotation(ControlRot);
 }

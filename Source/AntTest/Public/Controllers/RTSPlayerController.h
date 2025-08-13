@@ -44,6 +44,12 @@ public:
 	 */
 	ARTSPlayerController();
 
+public:
+	/**
+	 * @brief 每帧更新
+	 */
+	virtual void Tick(float DeltaSeconds) override;
+
 	/**
 	 * @brief 处理鼠标右键点击事件
 	 * @param MouseLocation 鼠标点击位置
@@ -73,8 +79,43 @@ protected:
 	 */
 	virtual void SetupInputComponent() override;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	float ZoomSpeed = 1000;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	float ZoomSpeed = 1000.f;
+
+	// 平滑缩放插值速度
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	float ZoomInterpSpeed = 8.f;
+
+	// 滚轮方向反转
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	bool bInvertZoomAxis = true;
+
+	// 弹簧臂长度范围
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	float MinArmLength = 500.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	float MaxArmLength = 8000.f;
+
+	// 旋转速度与俯仰约束
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	float RotateYawSpeed = 0.15f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	float RotatePitchSpeed = 0.15f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	float MinPitch = -85.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	float MaxPitch = -15.f;
+
+	// 基础移动速度与加速倍率
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float BaseMoveSpeed = 1600.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float SpeedBoostMultiplier = 2.f;
 
 private:
 
@@ -98,6 +139,18 @@ private:
 	/** @brief 鼠标左键动作，处理鼠标左键点击 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UInputAction> IA_LeftButton;
+
+	// 鼠标移动（用于Ctrl按下时旋转）
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UInputAction> IA_LookAction;
+
+	// 按住Ctrl进行镜头旋转的修饰键
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UInputAction> IA_RotateModifier;
+
+	// 按住Shift加速移动的修饰键
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UInputAction> IA_SpeedModifier;
 
 	/**
 	 * @brief 处理移动输入
@@ -127,6 +180,15 @@ private:
 	 */
 	void Input_LeftButtonReleased(const FInputActionValue& Value);
 
+	// 鼠标移动：仅在按住Ctrl时用于旋转
+	void Input_Look(const FInputActionValue& Value);
+
+	// 修饰键输入
+	void Input_RotateModifierStarted(const FInputActionValue& Value);
+	void Input_RotateModifierCompleted(const FInputActionValue& Value);
+	void Input_SpeedModifierStarted(const FInputActionValue& Value);
+	void Input_SpeedModifierCompleted(const FInputActionValue& Value);
+
 public:
 	/**
 	 * @brief 设置绘制状态
@@ -134,4 +196,10 @@ public:
 	 * @details 设置当前是否处于绘制状态
 	 */
 	FORCEINLINE void SetIsDraw(bool bIsDrawing) { bIsDraw = bIsDrawing;}
+
+private:
+	// 缩放目标值与状态
+	float DesiredArmLength = -1.f;
+	bool bIsRotateModifierHeld = false;
+	bool bIsSpeedModifierHeld = false;
 };
